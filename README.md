@@ -1,37 +1,8 @@
 # Genome App No AI
 
-Clean genome engineering MVP with Next.js, FastAPI, auth, saved analyses, and learning pages. This version contains no OpenAI dependency, no AI endpoint, and no AI UI.
+Clean genome engineering MVP with Next.js, FastAPI, auth, PostgreSQL-backed saved analyses, history, and learning pages.
 
-## Run Backend
-
-```bash
-cd backend
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Set environment variables in `backend/.env`:
-
-```env
-DATABASE_URL=postgresql+psycopg://postgres:YOUR-PASSWORD@db.rxmacxsziqsqyzzdljrk.supabase.co:5432/postgres
-JWT_SECRET_KEY=replace-with-a-long-random-secret
-FRONTEND_ORIGIN=http://localhost:3000
-```
-
-## Run Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Set `NEXT_PUBLIC_API_URL=http://localhost:8000` for local development if needed.
-# OffTarget MVP
-
-A production-ready MVP genome engineering web app for CRISPR guide RNA discovery. The frontend is built with Next.js App Router, TypeScript, and Tailwind CSS. The backend is a FastAPI service that scans NGG PAM sites, generates 20 nt upstream guides, scores efficiency, classifies risk, and returns structured results.
+This version intentionally contains no OpenAI dependency, no `/ai/explain` endpoint, and no AI UI.
 
 ## Local Setup
 
@@ -76,6 +47,8 @@ FRONTEND_ORIGIN=https://your-vercel-app.vercel.app
 ```
 
 ## Deployment
+
+For production deployment steps, see `DEPLOYMENT.md`.
 
 ### Vercel Frontend
 
