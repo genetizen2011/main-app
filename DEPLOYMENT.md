@@ -30,8 +30,8 @@ SUPABASE_ANON_KEY=your-supabase-anon-key
 
 ## Backend: Render
 
-1. Create a Render Web Service from this GitHub repository.
-2. Set root directory to `backend`.
+1. Use the included `render.yaml` blueprint, or create a Render Web Service manually from this GitHub repository.
+2. If configuring manually, set root directory to `backend`.
 3. Set build command:
 
 ```bash
@@ -45,6 +45,22 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
 5. Add the same backend environment variables listed above.
+
+Render health check path:
+
+```text
+/health
+```
+
+## Backend: Docker
+
+The backend can also be deployed from `backend/Dockerfile`.
+
+```bash
+cd backend
+docker build -t genome-app-no-ai-backend .
+docker run -p 8000:8000 --env-file .env genome-app-no-ai-backend
+```
 
 ## Frontend: Vercel
 
