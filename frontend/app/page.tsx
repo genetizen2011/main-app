@@ -14,43 +14,73 @@ import {
   type AuthUser,
   type SavedAnalysis,
 } from "@/lib/api";
+import {
+  getLocalStorageItem,
+  getStorageBlockedMessage,
+  removeLocalStorageItem,
+  STORAGE_BLOCKED_EVENT,
+  setLocalStorageItem,
+} from "@/lib/storage";
 
 const EXAMPLE_SEQUENCE =
   "ATGCGTACCGTAGCTAGCTAGGACCTGATCGTAGGCTAGCTAGGATCGATCGGATCCGTACTAGGCTA";
-const STORAGE_KEY = "offtarget.savedAnalyses.v1";
+const SAVED_ANALYSES_KEY = "offTarget_saved";
+const PENDING_RELOAD_KEY = "offtarget.pendingReload";
+const FASTA_NOTICE = "FASTA header detected and removed.";
 
 function validateSequence(sequence: string) {
-  if (!sequence) {
+  let cleaned = sequence;
+  const fastaHeaderRemoved = cleaned.trim().startsWith(">");
+
+  if (fastaHeaderRemoved) {
+    cleaned = cleaned.replace(/^>.*$/m, "").trim();
+  }
+
+  cleaned = cleaned.replace(/\s/g, "");
+  cleaned = cleaned.toUpperCase().replace(/U/g, "T");
+
+  if (!cleaned) {
     return {
       isValid: false,
       message: "Enter a target sequence to begin.",
+      sequence: cleaned,
+      fastaHeaderRemoved,
     };
   }
 
-  if (/[^ATCGU]/.test(sequence)) {
-    return {
-      isValid: false,
-      message: "Only A, T, C, G, and U bases are allowed.",
-    };
-  }
-
-  if (sequence.length < 20) {
+  if (cleaned.length < 20) {
     return {
       isValid: false,
       message: "Sequence must be at least 20 bp.",
+      sequence: cleaned,
+      fastaHeaderRemoved,
     };
   }
 
-  if (sequence.length > 200) {
+  if (cleaned.length > 200) {
     return {
       isValid: false,
-      message: "Sequence must be 200 bp or shorter.",
+      message: `Sequence too long — paste 20–200 bp (currently ${cleaned.length} bp).`,
+      sequence: cleaned,
+      fastaHeaderRemoved,
+    };
+  }
+
+  const invalid = cleaned.replace(/[ACGTN]/g, "");
+  if (invalid.length > 0) {
+    return {
+      isValid: false,
+      message: `Invalid characters found: ${[...new Set(invalid)].join(", ")}`,
+      sequence: cleaned,
+      fastaHeaderRemoved,
     };
   }
 
   return {
     isValid: true,
     message: "Sequence is valid and ready to analyze.",
+    sequence: cleaned,
+    fastaHeaderRemoved,
   };
 }
 
@@ -88,6 +118,8 @@ export default function Home() {
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState("");
+  const [storageError, setStorageError] = useState("");
+  const [fastaNotice, setFastaNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const validation = useMemo(() => validateSequence(sequence), [sequence]);
@@ -100,19 +132,37 @@ export default function Home() {
   );
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      setIsHistoryLoaded(true);
-      return;
+    function showStorageUnavailable() {
+      setStorageError(getStorageBlockedMessage());
+    }
+
+    window.addEventListener(STORAGE_BLOCKED_EVENT, showStorageUnavailable);
+    return () =>
+      window.removeEventListener(STORAGE_BLOCKED_EVENT, showStorageUnavailable);
+  }, []);
+
+  useEffect(() => {
+    function showStorageUnavailable() {
+      setStorageError(getStorageBlockedMessage());
     }
 
     try {
+      const stored = getLocalStorageItem(SAVED_ANALYSES_KEY, showStorageUnavailable);
+      if (!stored) {
+        console.log("Loaded saved analyses", { count: 0, analyses: [] });
+        return;
+      }
+
       const parsed = JSON.parse(stored) as SavedAnalysis[];
       if (Array.isArray(parsed)) {
         setSavedAnalyses(parsed);
+        console.log("Loaded saved analyses", {
+          count: parsed.length,
+          analyses: parsed,
+        });
       }
     } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
+      removeLocalStorageItem(SAVED_ANALYSES_KEY, showStorageUnavailable);
     } finally {
       setIsHistoryLoaded(true);
     }
@@ -120,7 +170,11 @@ export default function Home() {
 
   useEffect(() => {
     if (!isHistoryLoaded) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(savedAnalyses));
+    setLocalStorageItem(
+      SAVED_ANALYSES_KEY,
+      JSON.stringify(savedAnalyses),
+      () => setStorageError(getStorageBlockedMessage()),
+    );
   }, [isHistoryLoaded, savedAnalyses]);
 
   useEffect(() => {
@@ -135,7 +189,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const pendingReload = window.localStorage.getItem("offtarget.pendingReload");
+    const showStorageUnavailable = () =>
+      setStorageError(getStorageBlockedMessage());
+    const pendingReload = getLocalStorageItem(
+      PENDING_RELOAD_KEY,
+      showStorageUnavailable,
+    );
     if (!pendingReload) return;
 
     try {
@@ -146,18 +205,22 @@ export default function Home() {
       setSequence(parsed.sequence);
       setResults(parsed.results);
     } finally {
-      window.localStorage.removeItem("offtarget.pendingReload");
+      removeLocalStorageItem(PENDING_RELOAD_KEY, showStorageUnavailable);
     }
   }, []);
 
   async function handleAnalyze() {
+    if (isLoading) return;
     if (!validation.isValid) return;
 
     setError("");
+    setResults(null);
     setIsLoading(true);
 
     try {
-      const response = await analyzeSequence(sequence);
+      setSequence(validation.sequence);
+      setFastaNotice(validation.fastaHeaderRemoved ? FASTA_NOTICE : "");
+      const response = await analyzeSequence(validation.sequence);
       setResults(response);
     } catch (apiError) {
       setError(
@@ -174,11 +237,19 @@ export default function Home() {
     setSequence("");
     setResults(null);
     setError("");
+    setFastaNotice("");
   }
 
   function handleLoadExample() {
     setSequence(EXAMPLE_SEQUENCE);
     setResults(null);
+    setError("");
+    setFastaNotice("");
+  }
+
+  function handleSequenceChange(nextSequence: string) {
+    setSequence(nextSequence);
+    setFastaNotice("");
     setError("");
   }
 
@@ -308,6 +379,25 @@ export default function Home() {
           </div>
         </header>
 
+        {storageError ? (
+          <div className="mb-5 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm font-semibold text-yellow-800">
+            {storageError}
+          </div>
+        ) : null}
+
+        {fastaNotice ? (
+          <div className="mb-5 flex items-center justify-between gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <span>{fastaNotice}</span>
+            <button
+              type="button"
+              onClick={() => setFastaNotice("")}
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -324,7 +414,7 @@ export default function Home() {
               validationMessage={validation.message}
               isValid={validation.isValid}
               isLoading={isLoading}
-              onSequenceChange={setSequence}
+              onSequenceChange={handleSequenceChange}
               onAnalyze={handleAnalyze}
               onClear={handleClear}
               onLoadExample={handleLoadExample}
