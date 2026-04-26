@@ -17,15 +17,15 @@ import {
 import {
   getLocalStorageItem,
   getStorageBlockedMessage,
+  PENDING_RELOAD_STORAGE_KEY,
   removeLocalStorageItem,
+  SAVED_ANALYSES_STORAGE_KEY,
   STORAGE_BLOCKED_EVENT,
   setLocalStorageItem,
 } from "@/lib/storage";
 
 const EXAMPLE_SEQUENCE =
   "ATGCGTACCGTAGCTAGCTAGGACCTGATCGTAGGCTAGCTAGGATCGATCGGATCCGTACTAGGCTA";
-const SAVED_ANALYSES_KEY = "offTarget_saved";
-const PENDING_RELOAD_KEY = "offtarget.pendingReload";
 const FASTA_NOTICE = "FASTA header detected and removed.";
 
 function validateSequence(sequence: string) {
@@ -33,7 +33,7 @@ function validateSequence(sequence: string) {
   const fastaHeaderRemoved = cleaned.trim().startsWith(">");
 
   if (fastaHeaderRemoved) {
-    cleaned = cleaned.replace(/^>.*$/m, "").trim();
+    cleaned = cleaned.replace(/^>.*$/gm, "").trim();
   }
 
   cleaned = cleaned.replace(/\s/g, "");
@@ -51,7 +51,7 @@ function validateSequence(sequence: string) {
   if (cleaned.length < 20) {
     return {
       isValid: false,
-      message: "Sequence must be at least 20 bp.",
+      message: "Sequence too short — minimum 20 bp",
       sequence: cleaned,
       fastaHeaderRemoved,
     };
@@ -60,7 +60,7 @@ function validateSequence(sequence: string) {
   if (cleaned.length > 200) {
     return {
       isValid: false,
-      message: `Sequence too long — paste 20–200 bp (currently ${cleaned.length} bp).`,
+      message: "Sequence too long — maximum 200 bp",
       sequence: cleaned,
       fastaHeaderRemoved,
     };
@@ -70,7 +70,7 @@ function validateSequence(sequence: string) {
   if (invalid.length > 0) {
     return {
       isValid: false,
-      message: `Invalid characters found: ${[...new Set(invalid)].join(", ")}`,
+      message: `Invalid characters: ${[...new Set(invalid)].join(", ")}`,
       sequence: cleaned,
       fastaHeaderRemoved,
     };
@@ -147,7 +147,10 @@ export default function Home() {
     }
 
     try {
-      const stored = getLocalStorageItem(SAVED_ANALYSES_KEY, showStorageUnavailable);
+      const stored = getLocalStorageItem(
+        SAVED_ANALYSES_STORAGE_KEY,
+        showStorageUnavailable,
+      );
       if (!stored) {
         console.log("Loaded saved analyses", { count: 0, analyses: [] });
         return;
@@ -162,7 +165,7 @@ export default function Home() {
         });
       }
     } catch {
-      removeLocalStorageItem(SAVED_ANALYSES_KEY, showStorageUnavailable);
+      removeLocalStorageItem(SAVED_ANALYSES_STORAGE_KEY, showStorageUnavailable);
     } finally {
       setIsHistoryLoaded(true);
     }
@@ -171,7 +174,7 @@ export default function Home() {
   useEffect(() => {
     if (!isHistoryLoaded) return;
     setLocalStorageItem(
-      SAVED_ANALYSES_KEY,
+      SAVED_ANALYSES_STORAGE_KEY,
       JSON.stringify(savedAnalyses),
       () => setStorageError(getStorageBlockedMessage()),
     );
@@ -192,7 +195,7 @@ export default function Home() {
     const showStorageUnavailable = () =>
       setStorageError(getStorageBlockedMessage());
     const pendingReload = getLocalStorageItem(
-      PENDING_RELOAD_KEY,
+      PENDING_RELOAD_STORAGE_KEY,
       showStorageUnavailable,
     );
     if (!pendingReload) return;
@@ -205,7 +208,7 @@ export default function Home() {
       setSequence(parsed.sequence);
       setResults(parsed.results);
     } finally {
-      removeLocalStorageItem(PENDING_RELOAD_KEY, showStorageUnavailable);
+      removeLocalStorageItem(PENDING_RELOAD_STORAGE_KEY, showStorageUnavailable);
     }
   }, []);
 
