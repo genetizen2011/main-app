@@ -10,6 +10,7 @@ type ResultDashboardProps = {
   results: AnalyzeResponse | null;
   isLoading: boolean;
   compareAnalyses: SavedAnalysis[];
+  savedAnalysisCount: number;
   onSaveAnalysis: () => void;
   onExportCsv: () => void;
   canSave: boolean;
@@ -19,6 +20,7 @@ export default function ResultDashboard({
   results,
   isLoading,
   compareAnalyses,
+  savedAnalysisCount,
   onSaveAnalysis,
   onExportCsv,
   canSave,
@@ -65,7 +67,7 @@ export default function ResultDashboard({
       <SummaryPanel results={results} isLoading={isLoading} />
       <GuideTable guides={results?.guides ?? []} isLoading={isLoading} />
       <InsightPanel results={results} isLoading={isLoading} />
-      <CompareView analyses={compareAnalyses} />
+      <CompareView analyses={compareAnalyses} savedAnalysisCount={savedAnalysisCount} />
     </div>
   );
 }
